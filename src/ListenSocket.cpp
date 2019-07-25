@@ -34,6 +34,9 @@
 #include "amule.h"		// Needed for theApp
 #include "ServerConnect.h"	// Needed for CServerConnect
 
+#define GEO_BLOCKED
+#define BLOCKED_LIST "./.aMule/countryfilter.txt
+
 //-----------------------------------------------------------------------------
 // CListenSocket
 //-----------------------------------------------------------------------------
@@ -100,17 +103,34 @@ void CListenSocket::OnAccept()
 		} else {
 			// Create a new socket to deal with the connection
 			CClientTCPSocket* newclient = new CClientTCPSocket();
-			// Accept the connection and give it to the newly created socket
-			if (!AcceptWith(*newclient, false)) {
-				newclient->Safe_Delete();
-				m_pending = false;
-			} else {
-				if (!newclient->InitNetworkData()) {
-					// IP or port were not returned correctly
-					// from the accepted address, or filtered.
+
+			uint32_t ip = newClient.GetRemoteIP();
+			
+			std::string ip_address = boost::asio::ip::address_v4(ip).to_string();
+
+			BlockedCountries blacklist(BLOCKED_LIST);
+
+			// If Geo Blocked delete
+#ifdef GEO_BLOCK
+			if (!blacklist.toBlock(ip_address)) {
+#endif
+				// Accept the connection and give it to the newly created socket
+				if (!AcceptWith(*newclient, false)) {
 					newclient->Safe_Delete();
+					m_pending = false;
+				} else {
+					if (!newclient->InitNetworkData()) {
+						// IP or port were not returned correctly
+						// from the accepted address, or filtered.
+						newclient->Safe_Delete();
+					}
 				}
 			}
+#ifdef GEO_BLOCK
+			else {
+				newclient->Safe_Delete();
+			}
+#endif
 		}
 	}
 	if (m_pending) {
